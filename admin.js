@@ -1,92 +1,139 @@
-let CATALOGUE_ADMIN = JSON.parse(localStorage.getItem('techCatalogue')) || [];
-let USERS_ADMIN = JSON.parse(localStorage.getItem('techUsers')) || [];
+import { db } from "./firebase-config.js";
+import { collection, addDoc, getDocs, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+// Variables d'état globales pour l'interface admin
 let categorieActiveAdmin = "Ordinateurs";
 
-// Protection de la page admin
-const session = JSON.parse(localStorage.getItem('sessionActive'));
-if(!session || session.role !== 'admin') {
-    alert("Accès refusé. Réservé à l'administrateur.");
-    window.location.href = 'login.html';
-}
-
-function deconnexionAdmin() {
-    localStorage.removeItem('sessionActive');
-    window.location.href = 'index.html';
-}
-
-function changerCategorieAdmin(cat) {
-    categorieActiveAdmin = cat;
-    document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
-    if(cat === 'Ordinateurs') document.getElementById('tab-computers').classList.add('active');
-    if(cat === 'Smartphones') document.getElementById('tab-smartphones').classList.add('active');
-    if(cat === 'Accessoires') document.getElementById('tab-accessories').classList.add('active');
+// Changer de catégorie dans l'interface admin
+window.changerCategorieAdmin = function(categorie) {
+    categorieActiveAdmin = categorie;
     
-    document.getElementById('form-admin-title').innerText = `Ajouter un produit dans : ${cat}`;
-    afficherProduitsAdmin();
-}
-
-function afficherProduitsAdmin() {
-    const listContainer = document.getElementById('admin-products-list-container');
-    listContainer.innerHTML = "";
-    
-    // Filtrage automatique selon l'un des trois boutons cliqués
-    let filtres = CATALOGUE_ADMIN.filter(p => p.category === categorieActiveAdmin);
-    
-    filtres.forEach(p => {
-        listContainer.innerHTML += `
-            <div class="admin-product-row">
-                <div>
-                    <strong>${p.name}</strong> - <small>${p.price} $</small>
-                    <br><span style="font-size:12px; color:var(--text-muted);">${p.specs}</span>
-                </div>
-                <button class="filter-btn" style="border-color:#ef4444; color:#ef4444;" onclick="supprimerProduitAdmin('${p.id}')">Supprimer</button>
-            </div>`;
+    // Mise à jour visuelle des boutons de filtrage admin
+    document.querySelectorAll('.admin-filter-btn').forEach(btn => {
+        if (btn.innerText.includes(categorie)) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
     });
-}
 
-function ajouterNouveauProduitAdmin(e) {
+    // Recharger les produits de la catégorie sélectionnée depuis Firebase
+    afficherProduitsAdmin();
+};
+
+// AJOUT : Envoyer un nouveau produit sur Cloud Firestore
+window.ajouterNouveauProduitAdmin = async function(e) {
     e.preventDefault();
-    let name = document.getElementById('admin-p-name').value;
-    let specs = document.getElementById('admin-p-specs').value;
-    let price = document.getElementById('admin-p-price').value;
-    let imageUrl = document.getElementById('admin-p-image').value; // Lien URL internet direct
+    
+    const name = document.getElementById('admin-p-name').value;
+    const specs = document.getElementById('admin-p-specs').value;
+    const price = document.getElementById('admin-p-price').value;
+    const imageUrl = document.getElementById('admin-p-image').value;
 
-    let newProd = {
-        id: "p_" + Date.now(),
-        name,
+    if (!name || !price || !imageUrl) {
+        alert("Veuillez remplir les champs obligatoires (Nom, Prix, Image)");
+        return;
+    }
+
+    const nouveauProduit = {
+        name: name,
         category: categorieActiveAdmin,
-        price: parseInt(price),
-        specs,
-        imageUrl
+        price: parseInt(price, 10),
+        specs: specs,
+        imageUrl: imageUrl,
+        createdAt: new Date().getTime()
     };
 
-    CATALOGUE_ADMIN.push(newProd);
-    localStorage.setItem('techCatalogue', JSON.stringify(CATALOGUE_ADMIN));
-    document.getElementById('admin-product-form').reset();
-    afficherProduitsAdmin();
-    alert("Équipement ajouté au catalogue global !");
-}
+    try {
+        // Enregistrement dans la collection "produits" sur Firebase
+        await addDoc(collection(db, "produits"), nouveauProduit);
+        
+        document.getElementById('admin-product-form').reset();
+        alert("Équipement ajouté avec succès sur Firebase !");
+        
+        // Rafraîchir l'affichage de la catégorie actuelle
+        afficherProduitsAdmin(); 
+    } catch (error) {
+        alert("Erreur d'enregistrement Firebase : " + error.message);
+    }
+};
 
-function supprimerProduitAdmin(id) {
-    if(confirm("Supprimer cet équipement du catalogue ?")) {
-        CATALOGUE_ADMIN = CATALOGUE_ADMIN.filter(p => p.id !== id);
-        localStorage.setItem('techCatalogue', JSON.stringify(CATALOGUE_ADMIN));
-        afficherProduitsAdmin();
+// SUPPRESSION : Retirer un produit directement du Cloud
+window.supprimerProduitAdmin = async function(id) {
+    if (confirm("Voulez-vous vraiment supprimer cet équipement de Firebase ?")) {
+        try {
+            await deleteDoc(doc(db, "produits", id));
+            alert("Produit supprimé du cloud avec succès !");
+            afficherProduitsAdmin();
+        } catch (error) {
+            alert("Erreur de suppression : " + error.message);
+        }
+    }
+};
+
+// LECTURE : Afficher les produits filtrés depuis Firebase
+async function afficherProduitsAdmin() {
+    const listContainer = document.getElementById('admin-products-list-container');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = "<p>Mise à jour du stock depuis Firebase...</p>";
+    
+    try {
+        const querySnapshot = await getDocs(collection(db, "produits"));
+        listContainer.innerHTML = "";
+        
+        let aucunProduit = true;
+
+        querySnapshot.forEach((docSnap) => {
+            const p = docSnap.data();
+            if (p.category === categorieActiveAdmin) {
+                aucunProduit = false;
+                listContainer.innerHTML += `
+                    <div class="admin-product-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; border-bottom: 1px solid #eee;">
+                        <div>
+                            <strong>${p.name}</strong> - <small>${p.price} $</small>
+                            <br><span style="font-size:12px; color:#666;">${p.specs || 'Aucune spécification'}</span>
+                        </div>
+                        <button class="filter-btn" style="border: 1px solid #ef4444; color:#ef4444; background: transparent; padding: 5px 10px; cursor: pointer; border-radius: 4px;" onclick="supprimerProduitAdmin('${docSnap.id}')">Supprimer</button>
+                    </div>`;
+            }
+        });
+
+        if (aucunProduit) {
+            listContainer.innerHTML = `<p>Aucun produit dans la catégorie ${categorieActiveAdmin}.</p>`;
+        }
+    } catch (error) {
+        console.error("Erreur Firestore lors du chargement des produits :", error);
+        listContainer.innerHTML = "<p style='color:red;'>Erreur lors du chargement des données.</p>";
     }
 }
 
-function afficherUtilisateurs() {
+// LECTURE : Afficher la liste des clients réels enregistrés sur Firebase
+async function afficherUtilisateurs() {
     const container = document.getElementById('admin-users-container');
-    container.innerHTML = "";
-    USERS_ADMIN.forEach(u => {
-        container.innerHTML += `
-            <div class="user-row">
-                <span class="user-status"></span>
-                <strong>${u.email}</strong> (${u.role})
-            </div>`;
-    });
+    if (!container) return;
+    
+    container.innerHTML = "<p>Chargement des comptes clients depuis Firebase...</p>";
+    
+    try {
+        const querySnapshot = await getDocs(collection(db, "utilisateurs"));
+        container.innerHTML = "";
+        
+        querySnapshot.forEach((docSnap) => {
+            const u = docSnap.data();
+            container.innerHTML += `
+                <div class="user-row" style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                    <strong>${u.email}</strong> - <span style="text-transform:capitalize; color:#007bff; font-weight:600;">${u.role || 'client'}</span>
+                </div>`;
+        });
+    } catch (error) {
+        console.error("Erreur Firestore lors de la récupération des utilisateurs :", error);
+        container.innerHTML = "<p style='color:red;'>Erreur de chargement des utilisateurs.</p>";
+    }
 }
 
-// Lancement
-changerCategorieAdmin('Ordinateurs');
-afficherUtilisateurs();
+// Initialisation au chargement de la page d'administration
+document.addEventListener("DOMContentLoaded", () => {
+    afficherProduitsAdmin();
+    afficherUtilisateurs();
+});
