@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validation de Commande | TechShop</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <div class="logo" onclick="window.location.href='index.html'" style="cursor: pointer;">Tech<span>Shop</span></div>
+        <nav><a href="index.html" class="back-home-link">← Retour au catalogue</a></nav>
+    </header>
+
+    <main class="checkout-layout">
+        <section class="checkout-form-section">
+            <h2>Informations de Livraison</h2>
+            <form id="checkout-form" onsubmit="validerLaCommande(event)">
+                
+                <div class="form-group">
+                    <label for="nom">Nom complet</label>
+                    <input type="text" id="nom" placeholder="Ex: Jean Mukendi" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="telephone">Numéro de téléphone</label>
+                    <div class="phone-input-wrapper">
+                        <span class="phone-prefix">+243</span>
+                        <input type="tel" id="telephone" placeholder="812345678" maxlength="9" pattern="[0-9]{9}" required>
+                    </div>
+                </div>
+
+                <div class="address-grid">
+                    <div class="form-group">
+                        <label for="adr-numero">Numéro</label>
+                        <input type="text" id="adr-numero" placeholder="Ex: 45 bis" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adr-avenue">Avenue</label>
+                        <input type="text" id="adr-avenue" placeholder="Ex: De l'Université" required>
+                    </div>
+                </div>
+                <div class="address-grid">
+                    <div class="form-group">
+                        <label for="adr-quartier">Quartier</label>
+                        <input type="text" id="adr-quartier" placeholder="Ex: Lumumba" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adr-commune">Commune / Ville</label>
+                        <input type="text" id="adr-commune" placeholder="Ex: Kamina" required>
+                    </div>
+                </div>
+
+                <h2 style="margin-top: 40px;">Mode de Paiement</h2>
+                <div class="payment-methods-grid">
+                    <label class="payment-method-card">
+                        <input type="radio" name="payment" value="mobile_money" id="pay-mobile" checked onclick="toggleMobileOperators(true)">
+                        <div class="method-details">
+                            <span class="method-icon">📱</span>
+                            <span class="method-title">Mobile Money</span>
+                            <span class="method-desc">Paiement électronique instantané</span>
+                        </div>
+                    </label>
+
+                    <label class="payment-method-card">
+                        <input type="radio" name="payment" value="cash" id="pay-cash" onclick="toggleMobileOperators(false)">
+                        <div class="method-details">
+                            <span class="method-icon">💵</span>
+                            <span class="method-title">À la livraison</span>
+                            <span class="method-desc">Payer en espèces à la réception</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div id="mobile-operators-section" class="operators-box">
+                    <h3>Sélectionnez votre réseau :</h3>
+                    <div class="operators-grid">
+                        <label class="operator-item">
+                            <input type="radio" name="operator" value="M-Pesa" checked>
+                            <span class="operator-label mpesa">Vodacom M-Pesa</span>
+                        </label>
+                        <label class="operator-item">
+                            <input type="radio" name="operator" value="Airtel Money">
+                            <span class="operator-label airtel">Airtel Money</span>
+                        </label>
+                        <label class="operator-item">
+                            <input type="radio" name="operator" value="Orange Money">
+                            <span class="operator-label orange">Orange Money</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="confirm-order-btn" style="margin-top: 20px;">Confirmer et payer ma commande</button>
+            </form>
+        </section>
+
+        <section class="checkout-summary-section">
+            <h3>Résumé de la commande</h3>
+            <div id="checkout-summary-items"></div>
+            <div class="summary-total-box">
+                <div class="summary-row"><span>Sous-total</span><span id="summary-subtotal">0 $</span></div>
+                <div class="summary-row"><span>Livraison</span><span style="color: var(--accent); font-weight: 600;">Gratuite</span></div>
+                <hr class="summary-divider">
+                <div class="summary-row total"><span>Total à payer</span><span id="summary-total">0 $</span></div>
+            </div>
+        </section>
+    </main>
+
+    <script src="checkout.js"></script>
+</body>
+</html>

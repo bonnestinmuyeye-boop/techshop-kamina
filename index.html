@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechShop | Premium Tech Store</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <div class="logo">Tech<span>Shop</span></div>
+        <nav class="nav-right">
+            <button id="theme-toggle" class="icon-btn">🌓</button>
+            
+            <button id="auth-nav-btn" class="login-btn" onclick="window.location.href='login.html'">Connexion</button>
+            
+            <div class="cart-icon" id="open-cart-btn">
+                <span>🛒</span>
+                <span class="cart-badge" id="cart-count">0</span>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section class="search-container">
+            <input type="text" id="search-input" placeholder="🔍 Rechercher un ordinateur, un smartphone, un accessoire...">
+        </section>
+
+        <section class="categories-container">
+            <button class="filter-btn active" data-category="tous">Tout voir</button>
+            <button class="filter-btn" data-category="Ordinateurs">💻 Ordinateurs</button>
+            <button class="filter-btn" data-category="Smartphones">📱 Smartphones</button>
+            <button class="filter-btn" data-category="Accessoires">🎧 Accessoires</button>
+        </section>
+
+        <section class="products-grid" id="products-container"></section>
+    </main>
+
+    <div class="cart-sidebar" id="cart-sidebar">
+        <div class="cart-sidebar-header">
+            <h3>Mon Panier</h3>
+            <button class="close-btn" id="close-cart-btn">&times;</button>
+        </div>
+        <div class="cart-items" id="cart-items-container">
+            <p class="empty-cart-msg">Votre panier est vide.</p>
+        </div>
+        <div class="cart-footer">
+            <div class="total-row">
+                <span>Total:</span>
+                <span id="cart-total">0 $</span>
+            </div>
+            <button class="checkout-btn" id="proceed-to-checkout-btn">Passer la commande</button>
+        </div>
+    </div>
+
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
