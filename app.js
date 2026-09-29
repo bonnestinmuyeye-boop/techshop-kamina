@@ -1,5 +1,5 @@
 // =================================================================
-// 1. CONFIGURATION & INITIALISATION DE FIREBASE
+// 1. CONFIGURATION & INITIALISATION FIREBASE MODULES
 // =================================================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -28,8 +28,10 @@ let categorieActiveAdmin = "Ordinateurs";
 let modeInscription = false;
 let utilisateurConnecte = null;
 let clientSelectionneChat = null;
+let mediaRecorder = null;
+let chunksAudio = [];
 
-// Chiffrement / Déchiffrement local de bout en bout
+// Sécurité locale : Chiffrement / Déchiffrement de bout en bout
 function crypterTexte(txt) {
     if (!txt) return "";
     return btoa(unescape(encodeURIComponent(txt)));
@@ -59,9 +61,10 @@ function naviguerVers(idEcran) {
 }
 
 // =================================================================
-// 4. CHARGEMENT INITIAL & ÉCOUTEURS
+// 4. CHARGEMENT INITIAL & ÉCOUTEURS D'ÉVÉNEMENTS
 // =================================================================
 window.addEventListener('DOMContentLoaded', () => {
+    // Logo Accueil / Admin
     const logo = document.getElementById('main-logo-btn');
     if (logo) logo.addEventListener('click', () => {
         if (utilisateurConnecte && document.getElementById('admin-badge').style.display !== 'none') {
@@ -99,7 +102,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Afficher/Masquer le mot de passe
+    // Afficher/Masquer le mot de passe (Œil)
     const togglePasswordBtn = document.getElementById('toggle-password-visibility');
     const passwordInput = document.getElementById('auth-password');
     if (togglePasswordBtn && passwordInput) {
@@ -144,7 +147,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search-input');
     if (searchInput) searchInput.addEventListener('input', filtrerRecherche);
 
-    // Onglets Admin
+    // Onglets Espace Admin
     const tabsAdmin = { 'tab-computers': 'Ordinateurs', 'tab-smartphones': 'Smartphones', 'tab-accessories': 'Accessoires' };
     Object.keys(tabsAdmin).forEach(idTab => {
         const tabEl = document.getElementById(idTab);
@@ -153,7 +156,8 @@ window.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
                 categorieActiveAdmin = tabsAdmin[idTab];
-                document.getElementById('form-admin-title').textContent = "Ajouter un produit dans : " + categorieActiveAdmin;
+                const formTitle = document.getElementById('form-admin-title');
+                if (formTitle) formTitle.textContent = "Ajouter un produit dans : " + categorieActiveAdmin;
                 afficherProduitsAdmin();
             });
         }
@@ -172,7 +176,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Chat widget
+    // Widget Chat Client
     const chatOpenBtn = document.getElementById('ai-chat-open-btn');
     const chatCloseBtn = document.getElementById('ai-chat-close-btn');
     const chatBox = document.getElementById('ai-chat-box');
@@ -190,13 +194,26 @@ window.addEventListener('DOMContentLoaded', () => {
     if (clientChatSendBtn) clientChatSendBtn.addEventListener('click', envoyerMessageClient);
     if (clientChatInput) clientChatInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') envoyerMessageClient(); });
 
-    // Démarrage des données
+    // Micro audio Client
+    const clientMicBtn = document.getElementById('client-chat-mic-btn');
+    if (clientMicBtn) clientMicBtn.addEventListener('click', () => gererEnregistrementAudio(clientMicBtn, false));
+
+    // Admin Chat boutons
+    const adminChatSendBtn = document.getElementById('admin-chat-send-btn');
+    const adminChatInput = document.getElementById('admin-chat-input');
+    if (adminChatSendBtn) adminChatSendBtn.addEventListener('click', envoyerMessageAdmin);
+    if (adminChatInput) adminChatInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') envoyerMessageAdmin(); });
+
+    const adminMicBtn = document.getElementById('admin-chat-mic-btn');
+    if (adminMicBtn) adminMicBtn.addEventListener('click', () => gererEnregistrementAudio(adminMicBtn, true));
+
+    // Initialisation
     synchroniserPanier();
     chargerCatalogueDepuisCloud();
 });
 
 // =================================================================
-// 5. AUTHENTIFICATION & SESSION
+// 5. SURVEILLANCE SESSION & AUTHENTIFICATION
 // =================================================================
 onAuthStateChanged(auth, async (user) => {
     const authBtn = document.getElementById('auth-nav-btn');
@@ -273,7 +290,7 @@ async function gererSoumissionAuth(e) {
                 role: "client",
                 createdAt: serverTimestamp()
             });
-            alert("Compte client créé avec succès !");
+            alert("Compte créé avec succès !");
         } else {
             await signInWithEmailAndPassword(auth, email, pass);
         }
@@ -285,9 +302,10 @@ async function gererSoumissionAuth(e) {
 }
 
 // =================================================================
-// 6. CHARGEMENT ET AFFICHAGE DU CATALOGUE (RÉSOLU)
+// 6. CHARGEMENT ROBUSTE DU CATALOGUE FIRESTORE
 // =================================================================
 async function chargerCatalogueDepuisCloud() {
+    const container = document.getElementById('products-container');
     try {
         const querySnapshot = await getDocs(collection(db, "produits"));
         CATALOGUE = [];
@@ -295,17 +313,25 @@ async function chargerCatalogueDepuisCloud() {
             const d = docSnap.data();
             CATALOGUE.push({
                 id: docSnap.id,
-                name: d.name || d.nom || "Article",
-                specs: d.specs || d.caracteristiques || "",
-                price: d.price || d.prix || 0,
-                imageUrl: d.imageUrl || d.image || "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400",
+                name: d.name || d.nom || d.titre || "Sans nom",
+                specs: d.specs || d.caracteristiques || d.description || "",
+                price: d.price ?? d.prix ?? 0,
+                imageUrl: d.imageUrl || d.image || d.url || "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400",
                 category: d.category || d.categorie || "Ordinateurs"
             });
         });
+
         afficherCatalogueClient();
         if (utilisateurConnecte) afficherProduitsAdmin();
     } catch (error) {
-        console.error("Erreur de chargement Firestore :", error);
+        console.error("Erreur critique Firestore :", error);
+        if (container) {
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 30px; color: #ef4444; background: rgba(239,68,68,0.1); border-radius: 8px;">
+                    <strong>Erreur de chargement Firestore :</strong><br>${error.message}
+                </div>
+            `;
+        }
     }
 }
 
@@ -314,7 +340,7 @@ function afficherCatalogueClient() {
     if (!container) return;
     container.innerHTML = "";
 
-    const produitsFiltres = CATALOGUE.filter(p => categorieActiveClient === "tous" || p.category === categorieActiveClient);
+    const produitsFiltres = CATALOGUE.filter(p => categorieActiveClient === "tous" || p.category.toLowerCase() === categorieActiveClient.toLowerCase());
 
     if (produitsFiltres.length === 0) {
         container.innerHTML = `<p style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">Aucun équipement disponible.</p>`;
@@ -325,7 +351,7 @@ function afficherCatalogueClient() {
         const card = document.createElement('div');
         card.className = 'product-card';
         card.innerHTML = `
-            <img src="${p.imageUrl}" alt="${p.name}" class="product-image">
+            <img src="${p.imageUrl}" alt="${p.name}" class="product-image" onerror="this.src='https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400'">
             <div class="product-info">
                 <h3 class="product-title">${p.name}</h3>
                 <p class="product-specs">${p.specs}</p>
@@ -346,18 +372,32 @@ function afficherCatalogueClient() {
 }
 
 function filtrerRecherche() {
-    const cible = this.value.toLowerCase();
+    const cible = (this.value || "").trim().toLowerCase();
     const container = document.getElementById('products-container');
     if (!container) return;
-    container.innerHTML = "";
 
-    const produitsFiltres = CATALOGUE.filter(p => p.name.toLowerCase().includes(cible) || p.specs.toLowerCase().includes(cible));
+    if (!cible) {
+        afficherCatalogueClient();
+        return;
+    }
+
+    container.innerHTML = "";
+    const produitsFiltres = CATALOGUE.filter(p => 
+        p.name.toLowerCase().includes(cible) || 
+        p.specs.toLowerCase().includes(cible) || 
+        p.category.toLowerCase().includes(cible)
+    );
+
+    if (produitsFiltres.length === 0) {
+        container.innerHTML = `<p style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">Aucun résultat pour cette recherche.</p>`;
+        return;
+    }
 
     produitsFiltres.forEach(p => {
         const card = document.createElement('div');
         card.className = 'product-card';
         card.innerHTML = `
-            <img src="${p.imageUrl}" alt="${p.name}" class="product-image">
+            <img src="${p.imageUrl}" alt="${p.name}" class="product-image" onerror="this.src='https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400'">
             <div class="product-info">
                 <h3 class="product-title">${p.name}</h3>
                 <p class="product-specs">${p.specs}</p>
@@ -369,10 +409,16 @@ function filtrerRecherche() {
         `;
         container.appendChild(card);
     });
+
+    container.querySelectorAll('.add-to-cart-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            ajouterAuPanier(this.getAttribute('data-id'));
+        });
+    });
 }
 
 // =================================================================
-// 7. GESTION DU PANIER
+// 7. GESTION DU PANIER (DISCRET & ROBUSTE)
 // =================================================================
 function ouvrirPanier() {
     document.getElementById('cart-sidebar').classList.add('open');
@@ -619,7 +665,7 @@ async function chargerUtilisateursAdmin() {
 }
 
 // =================================================================
-// 9. CHAT SÉCURISÉ CLIENT <-> ADMIN (ZERO IA)
+// 9. MESSAGERIE DIRECTE SÉCURISÉE CLIENT ⇄ ADMIN (ZERO IA)
 // =================================================================
 function ecouterMessagesClient() {
     if (!utilisateurConnecte) return;
@@ -632,10 +678,14 @@ function ecouterMessagesClient() {
         snapshot.forEach((docSnap) => {
             const m = docSnap.data();
             const estMoi = (m.senderId === utilisateurConnecte.uid);
-            const texte = decrypterTexte(m.message);
             const msgDiv = document.createElement('div');
-            msgDiv.className = `ai-msg ${estMoi ? 'user' : 'bot'}`;
-            msgDiv.textContent = texte;
+            msgDiv.className = `msg-bubble ${estMoi ? 'outgoing' : 'incoming'}`;
+            
+            if (m.type === "audio") {
+                msgDiv.innerHTML = `🎵 Mémo vocal :<br><audio controls src="${m.content}" style="max-width: 100%; margin-top: 5px;"></audio>`;
+            } else {
+                msgDiv.textContent = decrypterTexte(m.content);
+            }
             container.appendChild(msgDiv);
         });
         container.scrollTop = container.scrollHeight;
@@ -661,7 +711,8 @@ async function envoyerMessageClient() {
 
     await addDoc(collection(db, "chats", utilisateurConnecte.uid, "messages"), {
         senderId: utilisateurConnecte.uid,
-        message: texteChiffre,
+        content: texteChiffre,
+        type: "texte",
         timestamp: serverTimestamp()
     });
 }
@@ -689,6 +740,7 @@ function ecouterDiscussionsPourAdmin() {
                 const headerTitle = document.getElementById('admin-active-client-title');
                 if (headerTitle) headerTitle.textContent = `Discussion avec : ${u.email}`;
                 ecouterMessagesAdminClient(u.uid);
+                ecouterDiscussionsPourAdmin();
             });
             container.appendChild(div);
         });
@@ -707,24 +759,80 @@ function ecouterMessagesAdminClient(clientUid) {
             const estAdminMsg = (m.senderId === utilisateurConnecte.uid);
             const div = document.createElement('div');
             div.className = `msg-bubble ${estAdminMsg ? 'outgoing' : 'incoming'}`;
-            div.textContent = decrypterTexte(m.message);
+            
+            if (m.type === "audio") {
+                div.innerHTML = `🎵 Mémo vocal :<br><audio controls src="${m.content}" style="max-width: 100%; margin-top: 5px;"></audio>`;
+            } else {
+                div.textContent = decrypterTexte(m.content);
+            }
             container.appendChild(div);
         });
         container.scrollTop = container.scrollHeight;
     });
+}
 
-    const sendBtn = document.getElementById('admin-chat-send-btn');
+async function envoyerMessageAdmin() {
     const input = document.getElementById('admin-chat-input');
-    if (sendBtn && input) {
-        sendBtn.onclick = async () => {
-            if (!input.value.trim()) return;
-            const texteChiffre = crypterTexte(input.value.trim());
-            input.value = "";
-            await addDoc(collection(db, "chats", clientUid, "messages"), {
-                senderId: utilisateurConnecte.uid,
-                message: texteChiffre,
-                timestamp: serverTimestamp()
-            });
-        };
+    if (!input || !input.value.trim() || !clientSelectionneChat || !utilisateurConnecte) return;
+
+    const texteChiffre = crypterTexte(input.value.trim());
+    input.value = "";
+
+    await addDoc(collection(db, "chats", clientSelectionneChat, "messages"), {
+        senderId: utilisateurConnecte.uid,
+        content: texteChiffre,
+        type: "texte",
+        timestamp: serverTimestamp()
+    });
+}
+
+// Enregistrement Audio sécurisé en Base64 (Stocké directement dans Firestore, aucun Storage requis)
+async function gererEnregistrementAudio(btnElement, pourAdmin = false) {
+    let targetUid = pourAdmin ? clientSelectionneChat : (utilisateurConnecte ? utilisateurConnecte.uid : null);
+    if (!targetUid) {
+        alert("Sélectionnez ou connectez-vous d'abord à une conversation.");
+        return;
+    }
+
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        btnElement.classList.remove('recording');
+        btnElement.textContent = "🎤";
+    } else {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("L'enregistrement audio n'est pas autorisé ou non supporté.");
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            chunksAudio = [];
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunksAudio.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(chunksAudio, { type: 'audio/webm' });
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = async () => {
+                    const audioBase64 = reader.result;
+                    await addDoc(collection(db, "chats", targetUid, "messages"), {
+                        senderId: utilisateurConnecte.uid,
+                        content: audioBase64,
+                        type: "audio",
+                        timestamp: serverTimestamp()
+                    });
+                };
+            };
+
+            mediaRecorder.start();
+            btnElement.classList.add('recording');
+            btnElement.textContent = "🛑";
+        } catch (err) {
+            alert("Erreur micro : " + err.message);
+        }
     }
 }
